@@ -1,35 +1,36 @@
-# ------------------------------------------------------- # 
-# Map of SARS-CoV-2 Rate in the District of Columbia
-# 
-# Created by Ian Buller (Github: @idblr)
-# Created on 05/15/2020
-#
-# Recently modified by: Ian Buller (Github: @idblr)
-# Recently modified on: 05/16/2020
-#
-# Notes:
-# A) 05/15/2020 (@idblr) - Inspired by Prince of Petworth (@PopVille) post https://www.popville.com/2020/05/dc-neighborhood-covid-coronavirus-map-population/#more-234053
-# B) 05/15/2020 (@idblr) - Major credit to Molly (@zmotoly) for data
-# C) 05/16/2020 (@idblr) - Created static ggplot2 of cumulative cases per 1,000 and a leaflet
-# ------------------------------------------------------- #
+---
+title: Cumulative SARS-CoV-2 Cases in the District of Columbia by Health Planning Neighborhoods
+author: ~
+date: '2020-05-16'
+slug: cumulative-covid-dc-05142020
+categories: ["R"]
+tags: ["R Markdown", "leaflet", "R", "open data"]
+subtitle: ''
+summary: ''
+authors: []
+lastmod: '2020-05-17T8:47:18-04:00'
+featured: no
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: no
+projects: []
+---
 
-# -------- #
-# PACKAGES #
-# -------- #
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center", message = FALSE, warning = FALSE)
+```
 
+```{r packages}
+# Packages
 loadedPackages <- c("ggmap", "googlesheets4", "grid", "htmlwidgets", "latticeExtra", "leaflet", "raster", "RColorBrewer", "rgdal", "sp", "stringr")
 invisible(lapply(loadedPackages, require, character.only = T))
 
-# -------- #
-# SETTINGS #
-# -------- #
-
+# Settings
 gs4_deauth() # no Google authorization necessary because we are not reading a public repo
+```
 
-# ---------------- #
-# DATA IMPORTATION #
-# ---------------- #
-
+```{r data}
 # District of Columbia Health Planning Neighborhoods
 ## Data are available from https://opendata.dc.gov/
 gis_path <- "https://opendata.arcgis.com/datasets/de63a68eb7674548ae0ac01867123f7e_13.geojson"
@@ -44,20 +45,14 @@ covid <- googlesheets4::read_sheet(ss = covid_path,
 names(covid) <- sub("\n", "", names(covid)) # remove extra line in column names
 names(covid) <- gsub(" ", "_", names(covid)) # replace spaces with underscore
 
-# ---------------------- #
-# GEOGRAPHIC PREPARATION #
-# ---------------------- #
-
 # Merge
 dc_covid <- sp::merge(dc, covid, by.x = "CODE", by.y = "NB_Code")
 
 # UTM Coordinate Reference System for meter distances (to include scale)
 dc_covid_proj <- sp::spTransform(dc_covid, CRS("+init=EPSG:32618")) # UTM zone 18N (Washington, DC)
+```
 
-# --------------- #
-# STATIC PLOTTING #
-# --------------- #
-
+```{r static}
 # Uses ggplot2 package
 ## helpful material: https://cengel.github.io/rspatial/4_Mapping.nb.html
 ## Data preparation, ggplot2 requires a data.frame
@@ -66,8 +61,6 @@ dc_covid_proj$polyID <- sapply(slot(dc_covid_proj, "polygons"), function(x) slot
 CoV_DC_df <- merge(dc_covid_df, dc_covid_proj, by.x = "id", by.y="polyID") # merge data
 
 ## Plot of cumulative cases per 1,000
-f <- 1 # exansion factor
-png(file = "figures/COVID_DC_Cumulative_per1000_ggplot.png", height = 1000*f, width = 1000*f)
 ggplot2::ggplot() +                                      # initialize ggplot object
   ggplot2::geom_polygon(                                 # make a polygon
     data = CoV_DC_df,                                    # data frame
@@ -84,14 +77,11 @@ ggplot2::ggplot() +                                      # initialize ggplot obj
                  axis.text = ggplot2::element_blank(),            # remove tickmarks
                  axis.title = ggplot2::element_blank(),           # remove axis labels
                  panel.background = ggplot2::element_blank(),     # remove background gridlines
-                 text = ggplot2::element_text(size = 15*f)) +     # set font size
+                 text = ggplot2::element_text(size = 10)) +     # set font size
   ggplot2::coord_equal()                                 # both axes the same scale
-dev.off()
+```
 
-# -------------------- #
-# INTERACTIVE PLOTTING #
-# -------------------- #
-
+```{r leaflet}
 # Uses leaflet package
 ## Work with unprojected spatialpolygonsdataframe
 ## Project to WGS84 EPSG:4326
@@ -138,11 +128,4 @@ dc_m1 <- leaflet::leaflet(CoV_DC_WGS84) %>% # initial data = DC health planning 
   leaflet::hideGroup(c("Cumulative Cases", "Cumulative Rate")) %>% # no data shown (default)
   leaflet::addMiniMap() # add mini map
 dc_m1 # display leaflet plot
-
-###############
-# EXPORTATION #
-###############
-
-# export leaflet plot
-htmlwidgets::saveWidget(dc_m1, file = "COVID_DC_Leaflet.html", selfcontained = TRUE)
-# -------------------------- END OF CODE -------------------------- #  
+```
