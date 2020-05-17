@@ -66,6 +66,7 @@ dc_covid_proj$polyID <- sapply(slot(dc_covid_proj, "polygons"), function(x) slot
 CoV_DC_df <- merge(dc_covid_df, dc_covid_proj, by.x = "id", by.y="polyID") # merge data
 
 ## Plot of cumulative cases per 1,000
+png(file = "figures/covid_dc_cumulative_per1000_05152020.png", width = 800, height = 800)
 ggplot2::ggplot() +                                             # initialize ggplot object
   ggplot2::geom_polygon(                                        # make a polygon
     data = CoV_DC_df,                                           # data frame
@@ -77,13 +78,14 @@ ggplot2::ggplot() +                                             # initialize ggp
                              na.value = "grey67",               # color for NA (The National Mall)
                              direction = 1,                     # reverse colors in colorkey
                              guide = ggplot2::guide_legend(reverse = T)) +  # reverse order of colokey
-  ggplot2::ggtitle("Cumulative SARS-CoV-2 cases per 1,000 (March 7, 2020 - May 15, 2020)") + # add title
+  ggplot2::ggtitle("Cumulative SARS-CoV-2 cases per 1,000 in Washington D.C. as of May 15, 2020") + # add title
   ggplot2::theme(line = ggplot2::element_blank(),               # remove axis lines
                  axis.text = ggplot2::element_blank(),          # remove tickmarks
                  axis.title = ggplot2::element_blank(),         # remove axis labels
                  panel.background = ggplot2::element_blank(),   # remove background gridlines
-                 text = ggplot2::element_text(size = 10)) +     # set font size
+                 text = ggplot2::element_text(size = 15)) +     # set font size
   ggplot2::coord_equal()                                        # both axes the same scale
+dev.off()
 
 # -------------------- #
 # INTERACTIVE PLOTTING #
