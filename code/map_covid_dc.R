@@ -5,12 +5,13 @@
 # Created on 05/15/2020
 #
 # Recently modified by: Ian Buller (Github: @idblr)
-# Recently modified on: 05/16/2020
+# Recently modified on: 05/22/2020
 #
 # Notes:
 # A) 05/15/2020 (@idblr) - Inspired by Prince of Petworth (@PopVille) post https://www.popville.com/2020/05/dc-neighborhood-covid-coronavirus-map-population/#more-234053
 # B) 05/15/2020 (@idblr) - Major credit to Molly (@zmotoly) for data
 # C) 05/16/2020 (@idblr) - Created static ggplot2 of cumulative cases per 1,000 and a leaflet
+# D) 05/22/2020 (@idblr) - Created plots accounting for testing
 # ------------------------------------------------------- #
 
 # -------- #
@@ -43,6 +44,10 @@ covid <- googlesheets4::read_sheet(ss = covid_path,
                                    skip = 1) # skip 1st row of annotation
 names(covid) <- sub("\n", "", names(covid)) # remove extra line in column names
 names(covid) <- gsub(" ", "_", names(covid)) # replace spaces with underscore
+
+# Case rate accounting for testing rate
+#covid$May21_pertest_per1000 <- covid$Total_cases_May_21 / covid$Total_tests_May_21 / covid$`Population_(2018_ACS)` * 1000
+covid$Weighted_Case_Rate_May_21 <- covid$Cases_per_1000_May_21 / covid$Tests_per_1000_May_21
 
 # ---------------------- #
 # GEOGRAPHIC PREPARATION #
@@ -87,6 +92,28 @@ ggplot2::ggplot() +                                             # initialize ggp
   ggplot2::coord_equal()                                        # both axes the same scale
 dev.off()
 
+## Plot of cumulative cases per 1,000 accounting for testing
+png(file = "figures/covid_dc_cumulative_per1000_05212020_acounting_for_testing.png", width = 800, height = 800)
+ggplot2::ggplot() +                                             # initialize ggplot object
+  ggplot2::geom_polygon(                                        # make a polygon
+    data = CoV_DC_df,                                           # data frame
+    ggplot2::aes(x = long, y = lat, group = group,              # coordinates, and group them by polygons
+                 fill = ggplot2::cut_interval(Weighted_Case_Rate_May_21, 5)),       # variable to use for filling
+    colour = "white") +                                         # color of polygon borders
+  ggplot2::scale_fill_brewer("Case rate / testing rate",      # title of colorkey 
+                             palette = "Purples",               # fill with brewer colors 
+                             na.value = "grey67",               # color for NA (The National Mall)
+                             direction = 1,                     # reverse colors in colorkey
+                             guide = ggplot2::guide_legend(reverse = T)) +  # reverse order of colokey
+  ggplot2::ggtitle("Cumulative SARS-CoV-2 cases per 1,000 as of May 21, 2020 accounting for testing") + # add title
+  ggplot2::theme(line = ggplot2::element_blank(),               # remove axis lines
+                 axis.text = ggplot2::element_blank(),          # remove tickmarks
+                 axis.title = ggplot2::element_blank(),         # remove axis labels
+                 panel.background = ggplot2::element_blank(),   # remove background gridlines
+                 text = ggplot2::element_text(size = 10)) +     # set font size
+  ggplot2::coord_equal()                                        # both axes the same scale
+dev.off()
+
 # -------------------- #
 # INTERACTIVE PLOTTING #
 # -------------------- #
@@ -100,40 +127,61 @@ CoV_DC_WGS84 <- sp::spTransform(dc_covid_proj, CRS("+init=epsg:4326"))
 dc_health <- stringr::str_to_title(CoV_DC_WGS84$Neighborhood_Name)
 dc_health[c(11,25,41,49)] <- c("DC Medical Center", "GWU", "National Mall", "SW/Waterfront" )
 CoV_DC_WGS84$popup1 <- paste(dc_health, ": ",
-                             format(round(CoV_DC_WGS84$Total_cases_May_15, digits = 0), big.mark = ",", trim = T),
+                             format(round(CoV_DC_WGS84$Total_cases_May_21, digits = 0), big.mark = ",", trim = T),
                              " cumulative cases", sep = "")
 CoV_DC_WGS84$popup2 <- paste(dc_health, ": ",
-                             format(round(CoV_DC_WGS84$Cases_per_1000_May_15, digits = 0), big.mark = ",", trim = T),
+                             format(round(CoV_DC_WGS84$Cases_per_1000_May_21, digits = 0), big.mark = ",", trim = T),
                              " cumulative cases per 1,000", sep = "")
+CoV_DC_WGS84$popup3 <- paste(dc_health, ": ",
+                             format(round(CoV_DC_WGS84$Weighted_Case_Rate_May_21, digits = 2), big.mark = ",", trim = T),
+                             " cumulative cases per 1,000 accounting for testing", sep = "")
 
 ## Set Palettes
 pal_cum <- leaflet::colorNumeric(palette = "Purples",
-                                 domain = CoV_DC_WGS84$Total_cases_May_15,
+                                 domain = CoV_DC_WGS84$Total_cases_May_21,
                                  na.color = "#555555")
 pal_rate <- leaflet::colorNumeric(palette = "Purples",
-                                  domain = CoV_DC_WGS84$Cases_per_1000_May_15,
+                                  domain = CoV_DC_WGS84$Cases_per_1000_May_21,
                                   na.color = "#555555")
+pal_test <- leaflet::colorNumeric(palette = "Purples",
+                                  domain = CoV_DC_WGS84$Tests_per_1000_May_21,
+                                  na.color = "#555555")
+pal_weight <- leaflet::colorNumeric(palette = "Purples",
+                                    domain = CoV_DC_WGS84$Weighted_Case_Rate_May_21,
+                                    na.color = "#555555")
 
-### Create leaflet plot
-dc_m1 <-leaflet::leaflet(CoV_DC_WGS84, width = "100%") %>%                        # initial data
-  leaflet::setView(lng = -77, lat = 38.9, zoom = 11) %>%                  # starting coordinates
-  leaflet::addTiles() %>% # basemap
-  leaflet::addPolygons(data = CoV_DC_WGS84, color = "black", weight = 1, smoothFactor = 0.5, opacity = 1,
-                       fillOpacity = 0.67, fillColor = ~pal_cum(Total_cases_May_15), popup = ~popup1,
-                       highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE),
-                       group = "Cumulative Cases") %>%
-  leaflet::addPolygons(data = CoV_DC_WGS84, color = "black", weight = 1, smoothFactor = 0.5, opacity = 1,
-                       fillOpacity = 0.67, fillColor = ~pal_rate(Cases_per_1000_May_15), popup = ~popup2,
-                       highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE),
-                       group = "Cumulative Rate") %>%
-  leaflet::addLayersControl(overlayGroups = c("Cumulative Cases", "Cumulative Rate"), # layer selection
-                            options = layersControlOptions(collapsed = FALSE)) %>%     
-  addLegend("topright", pal = pal_cum, values = ~Total_cases_May_15,                  # legend for cases
-            title = "Cumulative Cases", opacity = 1, group = "Cumulative Cases") %>%
-  addLegend("topright", pal = pal_rate, values = ~Cases_per_1000_May_15,              # legend for rate
-            title = "Cumulative Rate per 1,000", opacity = 1, group = "Cumulative Rate") %>%
-  leaflet::hideGroup(c("Cumulative Cases", "Cumulative Rate")) %>% # no data shown (default)
-  leaflet::addMiniMap(position = "bottomleft") # add mini map
+## Create leaflet plot
+dc_m1 <-  leaflet::leaflet(CoV_DC_WGS84, width = "100%") %>%                        # initial data
+          leaflet::setView(lng = -77, lat = 38.9, zoom = 11) %>%                  # starting coordinates
+          leaflet::addTiles() %>% # basemap
+          leaflet::addPolygons(data = CoV_DC_WGS84, color = "black", weight = 1, smoothFactor = 0.5, opacity = 1,
+                               fillOpacity = 0.67, fillColor = ~pal_cum(Total_cases_May_21), popup = ~popup1,
+                               highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE),
+                               group = "Cases") %>%
+          leaflet::addPolygons(data = CoV_DC_WGS84, color = "black", weight = 1, smoothFactor = 0.5, opacity = 1,
+                               fillOpacity = 0.67, fillColor = ~pal_rate(Cases_per_1000_May_21), popup = ~popup2,
+                               highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE),
+                               group = "Cases per 1,000") %>%
+          leaflet::addPolygons(data = CoV_DC_WGS84, color = "black", weight = 1, smoothFactor = 0.5, opacity = 1,
+                               fillOpacity = 0.67, fillColor = ~pal_test(Tests_per_1000_May_21), popup = ~popup3,
+                               highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE),
+                               group = "Tests per 1,000") %>%
+          leaflet::addPolygons(data = CoV_DC_WGS84, color = "black", weight = 1, smoothFactor = 0.5, opacity = 1,
+                               fillOpacity = 0.67, fillColor = ~pal_weight(Weighted_Case_Rate_May_21), popup = ~popup3,
+                               highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE),
+                               group = "Case rate / testing rate") %>%
+          leaflet::addLayersControl(overlayGroups = c("Cases", "Cases per 1,000", "Tests per 1,000", "Case rate / testing rate"), # layer selection
+                                    options = layersControlOptions(collapsed = FALSE)) %>%     
+          addLegend("topright", pal = pal_cum, values = ~Total_cases_May_21,                  # legend for cases
+                    title = "Cumulative cases", opacity = 1, na.label = "No Data", group = "Cases") %>%
+          addLegend("topright", pal = pal_rate, values = ~Cases_per_1000_May_21,              # legend for rate
+                    title = "Cumulative cases per 1,000", opacity = 1, na.label = "No Data", group = "Cases per 1,000") %>%
+          addLegend("topright", pal = pal_test, values = ~Tests_per_1000_May_21,              # legend for Cases per 1,000 accounting for testing
+                    title = "Cumulative tests per 1,000", opacity = 1, na.label = "No Data", group = "Tests per 1,000") %>%
+          addLegend("topright", pal = pal_weight, values = ~Weighted_Case_Rate_May_21,              # legend for Cases per 1,000 accounting for testing
+                    title = "Case rate / testing rate", opacity = 1, na.label = "No Data", group = "Case rate / testing rate") %>%
+          leaflet::hideGroup(c("Cases", "Cases per 1,000", "Tests per 1,000", "Case rate / testing rate")) %>% # no data shown (default)
+          leaflet::addMiniMap(position = "bottomleft") # add mini map
 dc_m1 # display leaflet plot
 
 ###############
